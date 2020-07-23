@@ -7,63 +7,81 @@ from basecampy3 import Basecamp3
 from basecampy3.token_requestor import TokenRequester
 from basecampy3.config import BasecampConfig
 
-
-try:
-   input = raw_input  # Python 2
-except NameError:  # Python 3
-    pass
-
+available_commands = [
+    ("login", "Login with Basecamp using OAuth2"),
+    ("projects", "Manage current user projects"),
+    ("version", "Show BasecamPY3 CLI version"),
+    ("me", "Show information about currently logged in user"),
+]
 
 class CLI(object):
+    bc3 = Basecamp3()
+
     def __init__(self):
         pass
 
     @classmethod
     def from_command_line(cls):
         new = cls()
-        parser = argparse.ArgumentParser("bc3", description="BasecamPY3 API Tool")
-        parser.add_argument("--debug", "--verbose", dest="debug", action="store_true",
-                            help="Enables more verbose output")
-        # parser.add_argument('command', help="The section of the API to access.")
-        subparsers = parser.add_subparsers(title="subcommands", description="valid subcommands")
-        configure = subparsers.add_parser('configure', help="Configure tokens for this account")
-        configure.set_defaults(func=cls._configure)
-        # projects = subparsers.add_parser("projects", help="Manipulate project data in Basecamp")
-        # version = subparsers.add_parser("version", help="Displays the installed version of BasecamPY3")
+
+        parser = argparse.ArgumentParser(
+            "bc3",
+            description="BasecamPY3 API Tool"
+        )
+
+        parser.add_argument(
+            "--debug",
+            "--verbose",
+            dest="debug",
+            action="store_true",
+            help="Enables more verbose output"
+        )
+
+        subparsers = parser.add_subparsers(
+            metavar="command",
+            dest="command"
+        )
+
+        for command in available_commands:
+            subparsers.add_parser(command[0], help=command[1])
+
         args = parser.parse_args()
+
         loglevel = logging.DEBUG if args.debug else logging.INFO
+
         logging.getLogger().setLevel(loglevel)
         logging.basicConfig()
-        try:
-            args.func()
-        except AttributeError:
-            parser.print_usage()
-            return
 
-        return new
+        if (args.command):
+            getattr(cls, args.command)(cls.bc3)
+        else:
+            parser.print_help()
 
     @staticmethod
-    def _configure():
+    def configure(basecamp = None):
         print("This will generate an access token and refresh token for using the Basecamp 3 API.")
         print("If you have not done so already, you need to create an app at:")
         print("https://launchpad.37signals.com/integrations")
 
-        client_id = input("What is your app's Client ID?").strip()
-        client_secret = input("What is your app's Client Secret?").strip()
-        redirect_uri = input("What is your app's Redirect URI?").strip()
-        print("For this next bit we need your username and password. When you have finished this wizard and have "
-              "obtained your access and request tokens, you can change your password as the refresh token is all we "
-              "will need.")
-        user_email = input("What is the email address you log into Basecamp with?").strip()
-        user_pass = input("What is your password for logging into Basecamp?").strip()
+        client_id = "d07cc672ec7c0fc1829490dfd7da963fe3b38070"
+        client_secret = "9934efee6bcc7af32483333f5d2be5e668ea73bc"
+        redirect_uri = "http://localhost:8081/auth"
+
         print("Obtaining your access key and refresh token...")
-        requestor = TokenRequester(client_id, redirect_uri, user_email, user_pass)
-        code = requestor.get_user_code()
-        tokens = Basecamp3.trade_user_code_for_access_token(client_id=client_id, redirect_uri=redirect_uri,
-                                                            client_secret=client_secret, code=code)
+        requestor = TokenRequester(client_id, client_secret)
+
+        code = requestor.get_access_token()
+
+        tokens = Basecamp3.trade_user_code_for_access_token(
+            client_id=client_id, redirect_uri=redirect_uri,
+            client_secret=client_secret,
+            code=code
+        )
+
         print("Success! Your tokens are listed below.")
         print("Access Token: %s" % tokens['access_token'])
         print("Refresh Token: %s" % tokens['refresh_token'])
+
         while True:
             should_save = input("Do you want to save? (Y/N)").upper().strip()
             if should_save in ("Y", "YES"):
@@ -89,6 +107,25 @@ class CLI(object):
             except Exception as ex:
                 logging.error(traceback.format_exc())
                 print("Failed to save to '%s'" % location)
+
+    @staticmethod
+    def projects(basecamp = None):
+        print("Project list")
+        print("============")
+
+        for project in basecamp.projects.list():
+            print(project.name)
+
+    @staticmethod
+    def version():
+        print("0.0.1")
+
+    @staticmethod
+    def me(basecamp = None):
+        user_data = basecamp.who_am_i
+
+        print(f"{user_data['identity']['first_name']} {user_data['identity']['last_name']}")
+
 
     # @staticmethod
     # def _get_modules():
