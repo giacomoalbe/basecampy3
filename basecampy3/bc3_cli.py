@@ -1,21 +1,29 @@
 import argparse
 import logging
 import os
+import sys
 import traceback
 
 from basecampy3 import Basecamp3
 from basecampy3.token_requestor import TokenRequester
 from basecampy3.config import BasecampConfig
+from basecampy3.exc import NoDefaultConfigurationFound
+
+class BasecampCommand:
+    def __init__(self, name, help, need_config=True):
+        self.name = name
+        self.help = help
+        self.need_config = need_config
 
 available_commands = [
-    ("login", "Login with Basecamp using OAuth2"),
-    ("projects", "Manage current user projects"),
-    ("version", "Show BasecamPY3 CLI version"),
-    ("me", "Show information about currently logged in user"),
+    BasecampCommand(name="login", help="Login with Basecamp using OAuth2", need_config=False),
+    BasecampCommand(name="projects", help="Manage current user projects"),
+    BasecampCommand(name="me", help="Show information about currently logged in user"),
+    BasecampCommand(name="version", help="Show BasecamPY3 CLI version", need_config=False),
 ]
 
 class CLI(object):
-    bc3 = Basecamp3()
+    bc3 = None
 
     def __init__(self):
         pass
@@ -43,7 +51,7 @@ class CLI(object):
         )
 
         for command in available_commands:
-            subparsers.add_parser(command[0], help=command[1])
+            subparsers.add_parser(command.name, help=command.help)
 
         args = parser.parse_args()
 
@@ -53,12 +61,23 @@ class CLI(object):
         logging.basicConfig()
 
         if (args.command):
+            basecamp_command = [command for command in available_commands if command.name == args.command][0]
+
+            if basecamp_command.need_config:
+                try:
+                    cls.bc3 = Basecamp3()
+                except NoDefaultConfigurationFound as e:
+                    print("ERRORE! Configurazione di default non trovata.")
+                    print("Prima di poter accedere al proprio account Basecamp è necessario fare il login")
+                    print("bc3 login -h per maggiori informazioni")
+                    sys.exit(1)
+
             getattr(cls, args.command)(cls.bc3)
         else:
             parser.print_help()
 
     @staticmethod
-    def configure(basecamp = None):
+    def login(basecamp = None):
         print("This will generate an access token and refresh token for using the Basecamp 3 API.")
         print("If you have not done so already, you need to create an app at:")
         print("https://launchpad.37signals.com/integrations")
